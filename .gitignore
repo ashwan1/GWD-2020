@@ -158,3 +158,5 @@ cython_debug/
 data
 checkpoints
 lightning_logs
+
+*.zip

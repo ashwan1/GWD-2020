@@ -11,17 +11,11 @@ from torch.utils.data import DataLoader
 from config import Config
 from data_loaders import rcnn
 from modules.rcnn import FasterRCNNResnet50FPN
-from utils.augmentations import get_valid_transforms, get_train_transforms
+from utils.augmentations import get_valid_transforms, get_train_transforms, get_test_transforms
 from utils.data import get_data, collate_fn
 
 
-def train():
-    data_df = get_data()
-    train_ids, oof_ids = train_test_split(data_df['image_id'].unique(), test_size=0.10,
-                                          shuffle=True, random_state=Config.seed)
-    train_df = data_df.loc[data_df['image_id'].isin(train_ids)]
-    oof_df = data_df.loc[data_df['image_id'].isin(oof_ids)]
-
+def train_faster_rcnn(train_df, oof_df):
     train_dataset = rcnn.WheatDataset(train_df, transforms=get_train_transforms())
     train_dataloader = DataLoader(train_dataset, batch_size=Config.Train.batch_size,
                                   shuffle=True, num_workers=4, drop_last=True,
@@ -30,8 +24,8 @@ def train():
     oof_dataloader = DataLoader(oof_dataset, batch_size=Config.Train.batch_size,
                                 shuffle=False, num_workers=4,
                                 collate_fn=collate_fn, pin_memory=True)
-    model = FasterRCNNResnet50FPN.load_from_checkpoint('checkpoints\\faster_rcnn\\epoch=10.ckpt', **Config)
-    # model = FasterRCNNResnet50FPN(conf=Config)
+    # model = FasterRCNNResnet50FPN.load_from_checkpoint('checkpoints\\faster_rcnn\\epoch=9.ckpt', **Config)
+    model = FasterRCNNResnet50FPN(conf=Config)
     early_stop = callbacks.EarlyStopping(monitor='val_loss',
                                          patience=5,
                                          mode='min',
@@ -53,11 +47,21 @@ def train():
     trainer.fit(model, train_dataloader=train_dataloader,
                 val_dataloaders=oof_dataloader)
 
-    valid_dataset = rcnn.WheatDataset(get_data(mode='valid'), test=True, transforms=get_valid_transforms())
+    valid_dataset = rcnn.WheatDataset(get_data(mode='valid'), test=True, transforms=get_test_transforms())
     valid_dataloader = DataLoader(valid_dataset, batch_size=Config.Train.batch_size,
                                   shuffle=False, num_workers=4,
                                   collate_fn=collate_fn, pin_memory=True)
     trainer.test(model, test_dataloaders=valid_dataloader)
+
+
+def train():
+    data_df = get_data()
+    train_ids, oof_ids = train_test_split(data_df['image_id'].unique(), test_size=0.10,
+                                          shuffle=True, random_state=Config.seed)
+    train_df = data_df.loc[data_df['image_id'].isin(train_ids)]
+    oof_df = data_df.loc[data_df['image_id'].isin(oof_ids)]
+    if Config.model_type == 'faster_rcnn':
+        train_faster_rcnn(train_df, oof_df)
 
 
 if __name__ == '__main__':

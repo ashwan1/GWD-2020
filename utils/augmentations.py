@@ -1,9 +1,3 @@
-import math
-import random
-
-import cv2
-import numpy as np
-
 import albumentations as A
 from albumentations import BboxParams
 from albumentations.pytorch import ToTensorV2
@@ -41,3 +35,10 @@ def get_valid_transforms():
         A.Resize(Config.Train.img_size, Config.Train.img_size, p=1.0),
         ToTensorV2(p=1.0)
     ], bbox_params=BboxParams('pascal_voc', label_fields=['labels'], min_visibility=0.2))
+
+
+def get_test_transforms():
+    return A.Compose([
+        A.Resize(Config.Train.img_size, Config.Train.img_size, p=1.0),
+        ToTensorV2(p=1.0)
+    ], bbox_params=BboxParams('pascal_voc', label_fields=['labels']))
