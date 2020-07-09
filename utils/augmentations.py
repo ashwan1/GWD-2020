@@ -26,6 +26,7 @@ def get_train_transforms():
         A.CoarseDropout(max_height=64, max_width=64, min_holes=3,
                         min_height=32, min_width=32, p=0.5),
         A.Resize(Config.Train.img_size, Config.Train.img_size, p=1.0),
+        A.Normalize(max_pixel_value=1.0, p=1.0),
         ToTensorV2(p=1.0),
     ], bbox_params=BboxParams('pascal_voc', label_fields=['labels'], min_visibility=0.2))
 
@@ -33,6 +34,7 @@ def get_train_transforms():
 def get_valid_transforms():
     return A.Compose([
         A.Resize(Config.Train.img_size, Config.Train.img_size, p=1.0),
+        A.Normalize(max_pixel_value=1.0, p=1.0),
         ToTensorV2(p=1.0)
     ], bbox_params=BboxParams('pascal_voc', label_fields=['labels'], min_visibility=0.2))
 
@@ -40,5 +42,6 @@ def get_valid_transforms():
 def get_test_transforms():
     return A.Compose([
         A.Resize(Config.Train.img_size, Config.Train.img_size, p=1.0),
+        A.Normalize(max_pixel_value=1.0, p=1.0),
         ToTensorV2(p=1.0)
     ], bbox_params=BboxParams('pascal_voc', label_fields=['labels']))

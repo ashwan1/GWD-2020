@@ -49,7 +49,7 @@ class FasterRCNNResnet50FPN(LightningModule):
                                    div_factor=self.hparams.Train.Schedulers.OneCycleLR.div_factor)
         elif self.hparams.Train.scheduler == 'CyclicLR':
             scheduler = CyclicLR(optimizer,
-                                 base_lr=self.hparams.Train.lr / 3e3,
+                                 base_lr=self.hparams.Train.lr / 1e5,
                                  max_lr=self.hparams.Train.lr,
                                  step_size_up=self.hparams.Train.steps_per_epoch,
                                  mode=self.hparams.Train.Schedulers.CyclicLR.mode,
