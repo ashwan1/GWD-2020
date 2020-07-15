@@ -7,6 +7,7 @@ from pytorch_lightning import LightningModule
 from torchvision.models.detection import FasterRCNN
 from torchvision.models.detection.rpn import AnchorGenerator
 
+from custom.lr_schedulers.n_cycle import NCycleLR
 from custom.optimizers import RangerLars
 from utils.data import get_image_with_results
 from utils.losses_n_metrics import calculate_image_precision
@@ -47,6 +48,16 @@ class FasterRCNNResnet50FPN(LightningModule):
                                    anneal_strategy=self.hparams.Train.Schedulers.OneCycleLR.anneal_strategy,
                                    cycle_momentum=False,
                                    div_factor=self.hparams.Train.Schedulers.OneCycleLR.div_factor)
+        elif self.hparams.Train.scheduler == 'NCycleLR':
+            scheduler = NCycleLR(optimizer, max_lr=self.hparams.Train.lr,
+                                 n=self.hparams.Train.Schedulers.NCycleLR.n,
+                                 lr_factor=self.hparams.Train.Schedulers.NCycleLR.lr_factor,
+                                 epochs=self.hparams.Train.epochs,
+                                 steps_per_cycle=self.hparams.Train.Schedulers.NCycleLR.steps_per_cycle,
+                                 pct_start=self.hparams.Train.Schedulers.NCycleLR.pct_start,
+                                 anneal_strategy=self.hparams.Train.Schedulers.NCycleLR.anneal_strategy,
+                                 cycle_momentum=False,
+                                 div_factor=self.hparams.Train.Schedulers.NCycleLR.div_factor)
         elif self.hparams.Train.scheduler == 'CyclicLR':
             scheduler = CyclicLR(optimizer,
                                  base_lr=self.hparams.Train.lr / 1e5,

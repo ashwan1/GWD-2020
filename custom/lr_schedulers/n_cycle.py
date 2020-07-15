@@ -208,7 +208,8 @@ class NCycleLR(_LRScheduler):
                           "please use `get_last_lr()`.", UserWarning)
 
         lrs = []
-        step_num = self.last_epoch
+        global_step_num = self.last_epoch
+        step_num = global_step_num % (self.steps_per_cycle - 1)
 
         if step_num > self.total_steps:
             raise ValueError("Tried to step {} times. The specified number of total steps is {}"
@@ -235,7 +236,7 @@ class NCycleLR(_LRScheduler):
                 else:
                     group['momentum'] = computed_momentum
 
-            if step_num > 1 and step_num % self.steps_per_cycle == 1:
+            if global_step_num > 0 and step_num == 0:
                 group['max_lr'] = group['max_lr'] * self.lr_factor
 
         return lrs

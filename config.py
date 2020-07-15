@@ -25,6 +25,14 @@ __config__ = dict(
                 anneal_strategy='cos',
                 div_factor=1e4
             ),
+            NCycleLR=dict(
+                n=3,
+                steps_per_cycle=int(720 * (4 / 2) * 10),
+                lr_factor=0.75,
+                pct_start=0.05,
+                anneal_strategy='cos',
+                div_factor=1e4
+            ),
             CyclicLR=dict(
                 mode='triangular2',
                 gamma=0.9
@@ -38,4 +46,3 @@ __config__ = dict(
 )
 
 Config = OmegaConf.create(__config__)
-
