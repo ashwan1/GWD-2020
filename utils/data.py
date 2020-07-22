@@ -38,14 +38,21 @@ def visualize_bbox(img, bbox, bb_format='pascal_voc'):
     return img
 
 
-def write_img_to_disk(img, bboxes, return_image=False, file_path=None, bb_format='pascal_voc'):
+def write_img_to_disk(img, bboxes, return_image=False, file_path=None, heatmap=None, bb_format='pascal_voc'):
     image = img.copy()
     for bbox in bboxes:
         image = visualize_bbox(image, bbox, bb_format=bb_format)
+    plt.figure(figsize=(img.shape[0]/120, img.shape[1]/120), dpi=120)
+    plt.imshow(image)
+    if heatmap is not None:
+        plt.imshow(255 * heatmap, alpha=0.5, cmap='viridis')
+    plt.axis('off')
     if return_image:
         return image
     else:
-        cv2.imwrite(str(file_path), (image * 255).astype('int'))
+        # cv2.imwrite(str(file_path), (image * 255).astype('int'))
+        plt.savefig(str(file_path), bbox_inches='tight', pad_inches=0)
+    plt.close()
 
 
 def get_image_with_results(img, preds, gt_boxes):

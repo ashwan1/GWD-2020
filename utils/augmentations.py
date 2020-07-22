@@ -18,7 +18,7 @@ def get_train_transforms():
         A.OneOf([
             A.RandomRain(rain_type='drizzle', p=0.2),
             A.GaussianBlur(blur_limit=7, p=0.5),
-            A.GaussNoise((0.2, 0.3), p=0.3),
+            A.GaussNoise((0.2, 0.25), p=0.3),
             A.RandomShadow(p=0.2)
         ], p=0.4),
         A.ToGray(p=0.01),
@@ -27,14 +27,14 @@ def get_train_transforms():
                         min_height=32, min_width=32, p=0.5),
         A.Resize(Config.Train.img_size, Config.Train.img_size, p=1.0),
         ToTensorV2(p=1.0),
-    ], bbox_params=BboxParams('pascal_voc', label_fields=['labels'], min_visibility=0.2))
+    ], bbox_params=BboxParams('pascal_voc', label_fields=['labels'], min_visibility=0.0))
 
 
 def get_valid_transforms():
     return A.Compose([
         A.Resize(Config.Train.img_size, Config.Train.img_size, p=1.0),
         ToTensorV2(p=1.0)
-    ], bbox_params=BboxParams('pascal_voc', label_fields=['labels'], min_visibility=0.2))
+    ], bbox_params=BboxParams('pascal_voc', label_fields=['labels'], min_visibility=0.0))
 
 
 def get_test_transforms():
