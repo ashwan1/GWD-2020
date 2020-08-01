@@ -9,7 +9,8 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 
 from config import Config
-from data_loaders import rcnn
+from data_loaders import rcnn, centernet
+from modules.centernet import Resnest50CenterNet
 from modules.rcnn import FasterRCNNResnet50FPN
 from utils.augmentations import get_valid_transforms, get_train_transforms, get_test_transforms
 from utils.data import get_data, collate_fn
@@ -54,6 +55,42 @@ def train_faster_rcnn(train_df, oof_df):
     trainer.test(model, test_dataloaders=valid_dataloader)
 
 
+def train_center_net(train_df, oof_df):
+    train_dataset = centernet.WheatDataset(train_df, transforms=get_train_transforms())
+    train_dataloader = DataLoader(train_dataset, batch_size=Config.Train.batch_size,
+                                  shuffle=True, num_workers=4, drop_last=True, pin_memory=True)
+    oof_dataset = centernet.WheatDataset(oof_df, test=True, transforms=get_valid_transforms())
+    oof_dataloader = DataLoader(oof_dataset, batch_size=Config.Train.batch_size,
+                                shuffle=False, num_workers=4, pin_memory=True)
+    model = Resnest50CenterNet(conf=Config)
+    early_stop = callbacks.EarlyStopping(monitor='val_map',
+                                         patience=10,
+                                         mode='max',
+                                         verbose=True)
+    checkpoint = callbacks.ModelCheckpoint(str(Config.Train.checkpoint_dir),
+                                           monitor='val_map',
+                                           verbose=True,
+                                           mode='max',
+                                           save_top_k=1)
+    cbs = [
+        callbacks.LearningRateLogger()
+    ]
+    trainer = Trainer(gpus=1,
+                      early_stop_callback=early_stop,
+                      checkpoint_callback=checkpoint,
+                      callbacks=cbs,
+                      benchmark=True,
+                      deterministic=True,
+                      max_epochs=Config.Train.epochs)
+    trainer.fit(model, train_dataloader=train_dataloader,
+                val_dataloaders=oof_dataloader)
+
+    valid_dataset = centernet.WheatDataset(get_data(mode='valid'), test=True, transforms=get_test_transforms())
+    valid_dataloader = DataLoader(valid_dataset, batch_size=Config.Train.batch_size,
+                                  shuffle=False, num_workers=4, pin_memory=True)
+    trainer.test(model, test_dataloaders=valid_dataloader)
+
+
 def train():
     data_df = get_data()
     train_ids, oof_ids = train_test_split(data_df['image_id'].unique(), test_size=0.10,
@@ -62,6 +99,8 @@ def train():
     oof_df = data_df.loc[data_df['image_id'].isin(oof_ids)]
     if Config.model_type == 'faster_rcnn':
         train_faster_rcnn(train_df, oof_df)
+    elif Config.model_type == 'center_net':
+        train_center_net(train_df, oof_df)
 
 
 if __name__ == '__main__':

@@ -3,7 +3,7 @@ from omegaconf import OmegaConf
 
 _root_dir = Path(__file__).parent
 
-__model_type__ = 'faster_rcnn'
+__model_type__ = 'center_net'
 __config__ = dict(
     seed=42,
     model_type=__model_type__,
@@ -15,9 +15,10 @@ __config__ = dict(
         batch_size=2,
         lr=0.001,
         epochs=30,
-        img_size=1024,
+        img_size=512,
         steps_per_epoch=int(720 * (4 / 2)),
         scheduler='OneCycleLR',
+        maxpool_kernel_size=3,
         Schedulers=dict(
             interval='step',
             OneCycleLR=dict(

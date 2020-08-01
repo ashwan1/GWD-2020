@@ -4,6 +4,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 from config import Config
@@ -33,7 +34,7 @@ class WheatDataset(Dataset):
         width_heatmap = np.zeros((self.img_size, self.img_size), dtype=np.float32)
         height_heatmap = np.zeros((self.img_size, self.img_size), dtype=np.float32)
         # heatmap, width, height
-        target = np.zeros((3, self.img_size, self.img_size))
+        target = np.zeros((3, self.img_size, self.img_size), dtype=np.float32)
 
         load_image_type = 0
         if not self.test:
@@ -73,11 +74,14 @@ class WheatDataset(Dataset):
             write_img_to_disk(image.permute(1, 2, 0).cpu().numpy(),
                               bboxes,
                               file_path=self.write_path / f'{self.image_ids[index]}.jpg',
-                              heatmap=center_heatmap)
+                              heatmap=width_heatmap)
         target[0] = center_heatmap
-        target[1] = width_heatmap
-        target[2] = height_heatmap
-        return image, target
+        target[1] = height_heatmap
+        target[2] = width_heatmap
+        return image, torch.tensor(target)
+
+    def __len__(self) -> int:
+        return self.image_ids.shape[0]
 
     def load_image_and_boxes(self, index):
         image_id = self.image_ids[index]
