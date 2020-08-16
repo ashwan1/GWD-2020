@@ -3,7 +3,7 @@ from omegaconf import OmegaConf
 
 _root_dir = Path(__file__).parent
 
-__model_type__ = 'center_net'
+__model_type__ = 'faster_rcnn'
 __config__ = dict(
     seed=42,
     model_type=__model_type__,
@@ -14,8 +14,8 @@ __config__ = dict(
         checkpoint_dir=str(Path(f'checkpoints/{__model_type__}')),
         batch_size=2,
         lr=0.001,
-        epochs=30,
-        img_size=512,
+        epochs=50,
+        img_size=1024,
         steps_per_epoch=int(720 * (4 / 2)),
         scheduler='OneCycleLR',
         maxpool_kernel_size=3,

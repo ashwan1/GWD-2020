@@ -29,29 +29,42 @@ class Resnest50CenterNet(LightningModule):
         self.layer1 = resnest.layer1  # 256x256x256
         self.layer2 = resnest.layer2  # 512x128x128
         self.layer3 = resnest.layer3  # 1024x64x64
-        self.aspp = ASPP(1024, 128)
-        self.conv2 = ConvBnRelu(256, 128, 1)
-        self.conv3 = ConvBnRelu(256, 64, 3, padding=1)
-        self.conv4 = torch.nn.Conv2d(64, 1, 1)
-        self.conv5 = torch.nn.Conv2d(64, 2, 1)
+        self.layer4 = resnest.layer4  # 2048x32x32
+        self.conv2 = ConvBnRelu(2048, 1024, 3, padding=1)
+        self.conv3 = ConvBnRelu(1024, 512, 5, padding=2)
+        self.conv4 = ConvBnRelu(512, 256, 5, padding=2)
+        self.conv5 = ConvBnRelu(256, 64, 3, padding=1)
+        self.conv6 = ConvBnRelu(64, 32, 3, padding=1)
+        self.conv7 = torch.nn.Conv2d(32, 1, 1)
+        self.conv8 = torch.nn.Conv2d(32, 2, 1)
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
-        x = self.maxpool(x)
-        y = self.layer1(x)
-        x = self.layer2(y)
-        x = self.layer3(x)
-        x = self.aspp(x)
-        x = F.interpolate(x, scale_factor=4, mode='bilinear', align_corners=False)
-        y = self.conv2(y)
-        x = torch.cat((x, y), dim=1)
+        xr = self.relu(x)
+        x = self.maxpool(xr)
+        xl1 = self.layer1(x)
+        xl2 = self.layer2(xl1)
+        xl3 = self.layer3(xl2)
+        xl4 = self.layer4(xl3)
+        x = self.conv2(xl4)
+        x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
+        x = x + xl3
         x = self.conv3(x)
-        x = F.interpolate(x, scale_factor=4, mode='bilinear', align_corners=False)
-        x_center = self.conv4(x)
+        x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
+        x = x + xl2
+        x = self.conv4(x)
+        x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
+        x = x + xl1
+        x = self.conv5(x)
+        x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
+        x = x + xr
+        x = self.conv6(x)
+        x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
+        x_center = self.conv7(x)
         x_center = F.sigmoid(x_center)
-        x_wh = self.conv5(x)
-        return x_center, x_wh
+        x_hw = self.conv8(x)
+        return x_center, x_hw
 
     def configure_optimizers(self):
         scheduler = None
@@ -98,9 +111,8 @@ class Resnest50CenterNet(LightningModule):
         return [optimizer], schedulers
 
     # noinspection PyMethodMayBeStatic
-    def get_losses(self, outputs, targets):
-        center_hm = outputs[0]
-        hw_hm = torch.clamp(outputs[1], 0, 1)
+    def get_losses(self, center_hm, hw_hm, targets):
+        hw_hm = torch.clamp(hw_hm, 0, 1)
         center_hm_loss = F.binary_cross_entropy(center_hm, targets[:, 0].view(center_hm.shape))
         # center_hm_loss = self.neg_loss(center_hm, targets[:, 0].view(center_hm.shape))
         hw_hm_loss = F.l1_loss(hw_hm, targets[:, -2:])
@@ -137,29 +149,31 @@ class Resnest50CenterNet(LightningModule):
 
     def training_step(self, batch, batch_idx):
         images, targets = batch
-        outputs = self.forward(images)
-        center_hm_loss, wh_hm_loss = self.get_losses(outputs, targets)
-        loss = center_hm_loss + wh_hm_loss
+        center_hm, hw_hm = self.forward(images)
+        center_hm_loss, hw_hm_loss = self.get_losses(center_hm, hw_hm, targets)
+        loss = center_hm_loss + hw_hm_loss
         lr = self.trainer.lr_schedulers[0]['scheduler'].optimizer.param_groups[0]['lr']
         loss_dict = {
             'chm_loss': center_hm_loss,
-            'whhm_loss': wh_hm_loss
+            'hwhm_loss': hw_hm_loss
         }
         return {'loss': loss, 'log': loss_dict, 'progress_bar': {'lr': lr}}
 
     def validation_step(self, batch, batch_idx):
         images, targets = batch
-        outputs = self.forward(images)
-        center_hm_loss, wh_hm_loss = self.get_losses(outputs, targets)
-        loss = center_hm_loss + wh_hm_loss
+        center_hm, hw_hm = self.forward(images)
+        center_hm_loss, hw_hm_loss = self.get_losses(center_hm, hw_hm, targets)
+        loss = center_hm_loss + hw_hm_loss
         precisions = np.zeros((self.hparams.Train.batch_size,))
-        c_hm = self.nms(outputs[0])
-        for i, target in enumerate(targets):
+        center_hm = self.nms(center_hm)
+        for i in range(targets.shape[0]):
             img = images[i].permute(1, 2, 0).cpu().numpy()
-            gt_bboxes = self.get_gt_bboxes(target)
-            # write_img_to_disk(img, gt_bboxes, file_path=Path.cwd() / f'gt_{batch_idx}_{i}.jpg')
-            pred_bboxes = self.get_pred_bboxes(c_hm[i], outputs[1][i])
-            # write_img_to_disk(img, pred_bboxes, file_path=Path.cwd() / f'pred_{batch_idx}_{i}.jpg')
+            gt_bboxes = self.hm2bboxes(targets[i], 0.9999)
+            predictions = torch.cat([center_hm[i], hw_hm[i]], 0)
+            pred_bboxes = self.hm2bboxes(predictions, 0.6)
+            if batch_idx == 0:
+                write_img_to_disk(img, gt_bboxes, file_path=Path.cwd() / f'gt_{batch_idx}_{i}.jpg')
+                write_img_to_disk(img, pred_bboxes, file_path=Path.cwd() / f'pred_{batch_idx}_{i}.jpg')
             if pred_bboxes.size == 0:
                 precision = 0
             else:
@@ -194,44 +208,27 @@ class Resnest50CenterNet(LightningModule):
         return {'log': test_results}
 
     # noinspection PyMethodMayBeStatic
-    def get_gt_bboxes(self, target):
-        img_size = self.hparams.Train.img_size
-        h_hm = (target[1] * img_size).cpu().numpy()
-        w_hm = (target[2] * img_size).cpu().numpy()
-        centers = torch.nonzero(target[0] == 1).cpu().numpy().astype(np.int32)
-        bboxes = []
-        for x, y in centers:
-            h = h_hm[x, y]
-            w = w_hm[x, y]
-            x1, x2 = x - (h // 2), x + (h // 2)
-            y1, y2 = y - (w // 2), y + (w // 2)
-            bboxes.append([y1, x1, y2, x2])
-        return np.clip(np.asarray(bboxes, dtype=np.int32), 0, img_size - 1)
-
-    def nms(self, c_hm):
-        batch_size, channels, height, width = c_hm.shape
-        kernel_size = self.hparams.Train.maxpool_kernel_size
-        scores, indices = F.max_pool2d(c_hm, kernel_size, return_indices=True)
-        c_hm = F.max_unpool2d(scores, indices, kernel_size,
-                              output_size=(batch_size, channels, height, width))
-        return c_hm
-
-    def get_pred_bboxes(self, c_hm, hw_hm):
-        img_size = self.hparams.Train.img_size
-        h_hm = (hw_hm[0] * img_size).cpu().numpy()
-        w_hm = (hw_hm[1] * img_size).cpu().numpy()
-        centers = torch.nonzero(c_hm[0] > 0.5).cpu().numpy().astype(np.int32)
-        c_hm = c_hm[0].cpu().numpy()
+    def hm2bboxes(self, target, threshold):
+        img_size = target[0].shape[0]
+        hw_hm = target[1:].cpu().numpy()
+        centers = torch.nonzero(target[0] > threshold).cpu().numpy().astype(np.int32)
+        c_hm = target[0].cpu().numpy()
         bboxes = []
         scores = []
-        for x, y in centers:
-            h = h_hm[x, y]
-            w = w_hm[x, y]
-            x1, x2 = y - (w // 2), y + (w // 2)
-            y1, y2 = x - (h // 2), x + (h // 2)
-            bboxes.append([x1, y1, x2, y2])
-            scores.append(c_hm[x, y])
+        for row, col in centers:
+            h, w = hw_hm[:, row, col]
+            y_min, x_min = row - (h // 2), col - (w // 2)
+            y_max, x_max = y_min + h, x_min + w
+            bboxes.append([x_min, y_min, x_max, y_max])
+            scores.append(c_hm[row, col])
         sort_idx = np.argsort(scores)[::-1]
         bboxes = np.array(bboxes, dtype=np.int32)
         bboxes = bboxes[sort_idx]
         return np.clip(bboxes, 0, img_size - 1)
+
+    def nms(self, c_hm):
+        kernel = self.hparams.Train.maxpool_kernel_size
+        pad = (kernel - 1) // 2
+        c_hm_max = F.max_pool2d(c_hm, (kernel, kernel), stride=1, padding=pad)
+        keep = (c_hm_max == c_hm).float()
+        return c_hm * keep

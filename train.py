@@ -28,7 +28,7 @@ def train_faster_rcnn(train_df, oof_df):
     # model = FasterRCNNResnet50FPN.load_from_checkpoint('checkpoints\\faster_rcnn\\epoch=9.ckpt', **Config)
     model = FasterRCNNResnet50FPN(conf=Config)
     early_stop = callbacks.EarlyStopping(monitor='val_loss',
-                                         patience=10,
+                                         patience=20,
                                          mode='min',
                                          verbose=True)
     checkpoint = callbacks.ModelCheckpoint(str(Config.Train.checkpoint_dir),

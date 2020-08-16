@@ -74,7 +74,7 @@ class WheatDataset(Dataset):
             write_img_to_disk(image.permute(1, 2, 0).cpu().numpy(),
                               bboxes,
                               file_path=self.write_path / f'{self.image_ids[index]}.jpg',
-                              heatmap=width_heatmap)
+                              heatmap=height_heatmap)
         target[0] = center_heatmap
         target[1] = height_heatmap
         target[2] = width_heatmap
@@ -183,11 +183,11 @@ class WheatDataset(Dataset):
         if min(masked_gaussian.shape) > 0 and min(masked_c_heatmap.shape) > 0:
             np.maximum(masked_c_heatmap, masked_gaussian * self.k, out=masked_c_heatmap)
 
-        masked_w_heatmap_new = (w / self.img_size) * masked_gaussian
+        masked_w_heatmap_new = w * masked_gaussian
         if min(masked_gaussian.shape) > 0 and min(masked_w_heatmap.shape) > 0:
             np.maximum(masked_w_heatmap, masked_w_heatmap_new, out=masked_w_heatmap)
 
-        masked_h_heatmap_new = (h / self.img_size) * masked_gaussian
+        masked_h_heatmap_new = h * masked_gaussian
         if min(masked_gaussian.shape) > 0 and min(masked_h_heatmap.shape) > 0:
             np.maximum(masked_h_heatmap, masked_h_heatmap_new, out=masked_h_heatmap)
 
